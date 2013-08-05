@@ -7,7 +7,7 @@ Cachemaster is similar to VMTOUCH, but with more functions. Such as kick page ca
 ##Contributors
 henshao@taobao.com,tiechou@taobao.com
 
-##help
+##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
 *   -l Lock file into memory.
