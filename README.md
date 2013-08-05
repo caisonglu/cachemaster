@@ -2,8 +2,10 @@ cachemaster
 ===========
 
 ##Introduction
-Cachemaster is similar to VMTOUCH, but with more functions. Such as kick page cache, warmup/readahead data, lock data in mem, stat page cache, stat page cache in realtime mode, all by file or directory!
+Cachemaster is similar to VMTOUCH, but with more functions. Such as kick page cache, warmup/readahead data, lock data in mem, stat page cache, stat page cache in realtime mode, all by file or directory! 
 
+##Contributors
+henshao@taobao.com,tiechou@taobao.com
 
 ##help
 *   Usage:./cachemaster [Option] [File] ...
