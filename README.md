@@ -101,6 +101,24 @@ henshao@taobao.com,tiechou@taobao.com
 >-bash-3.2$ ./cachemaster -s -f data   
 >Stat:data size:488M cached:488M  
 
+###Warmup/Readahead of directory
+>-bash-3.2$ ./cachemaster -s -d mydir/  
+>Stat:mydir//file1 size:488M cached:0Bytes  
+>Stat:mydir//file2 size:488M cached:0Bytes  
+>Stat:mydir//child/file3 size:488M cached:0Bytes  
+>Total Cache of Directory:mydir/ size:1.4G cached:0Bytes  
+>-bash-3.2$ ./cachemaster -w -d mydir/   
+>Warmup File:mydir//file1 TimeUsed:5668 ms  
+>Warmup File:mydir//file2 TimeUsed:5787 ms  
+>Warmup File:mydir//child/file3 TimeUsed:6061 ms  
+>Warmup Dir:mydir//child TimeUsed:6061 ms  
+>Warmup Dir:mydir/ TimeUsed:17517 ms  
+>-bash-3.2$ ./cachemaster -s -d mydir/  
+>Stat:mydir//file1 size:488M cached:488M  
+>Stat:mydir//file2 size:488M cached:488M  
+>Stat:mydir//child/file3 size:488M cached:488M  
+>Total Cache of Directory:mydir/ size:1.4G cached:1.4G  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
