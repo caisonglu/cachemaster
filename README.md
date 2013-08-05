@@ -91,6 +91,16 @@ henshao@taobao.com,tiechou@taobao.com
 >[2103-8-5 16:11:17] 375000      358841  -16159  
 >[2103-8-5 16:11:17] 375000      0       -358841  
 
+###Warmup/Readahead of file
+>-bash-3.2$ ./cachemaster -c -f data   
+>Release:data  
+>-bash-3.2$ ./cachemaster -s -f data    
+>Stat:data size:488M cached:0Bytes  
+>-bash-3.2$ ./cachemaster -w -f data    
+>Warmup File:data TimeUsed:6027 ms  
+>-bash-3.2$ ./cachemaster -s -f data   
+>Stat:data size:488M cached:488M  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
