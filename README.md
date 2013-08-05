@@ -83,6 +83,14 @@ henshao@taobao.com,tiechou@taobao.com
 >[2103-8-5 16:05:14] 375000      375000  0  
 >[2103-8-5 16:05:15] 375000      375000  0  
 
+###Real time stat of directory(-s suppress the unchanged line)
+>-bash-3.2$ ./cachemaster -r -d mydir/ -i 0.5 -S   
+>file:mydir/  
+>time    pageCount       inCache change  
+>[2103-8-5 16:10:52] 375000      375000  375000  
+>[2103-8-5 16:11:17] 375000      358841  -16159  
+>[2103-8-5 16:11:17] 375000      0       -358841  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
