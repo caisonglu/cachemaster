@@ -44,6 +44,15 @@ henshao@taobao.com,tiechou@taobao.com
 >Stat:mydir//child/file3 size:488M cached:0Bytes  
 >Total Cache of Directory:mydir/ size:1.4G cached:0Bytes  
 
+###lock in mem of file
+>-bash-3.2$ ./cachemaster -l -f data   
+>Lock data succeed, size:488M  
+
+###lock in mem of file in daemon
+>-bash-3.2$ ./cachemaster -l -f data  -m  
+>-bash-3.2$ ps xf | grep cachemaster | grep -v grep  
+>28279 ?        SLs    0:00 ./cachemaster -l -f data -m  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
