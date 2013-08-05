@@ -8,15 +8,25 @@ Cachemaster is similar to VMTOUCH, but with more functions. Such as kick page ca
 henshao@taobao.com,tiechou@taobao.com
 
 ##Examples
+
 ###stat page cache of file
 >-bash-3.2$ ./cachemaster -s -f data  
 >Stat:data size:488M cached:488M  
+
 ###stat page cache of directory
 >-bash-3.2$ ./cachemaster -s -d mydir/  
 >Stat:mydir//file1 size:488M cached:0Bytes  
 >Stat:mydir//file2 size:488M cached:488M  
 >Stat:mydir//child/file3 size:488M cached:488M  
 >Total Cache of Directory:mydir/ size:1.4G cached:976M  
+
+###kick page cache of file
+>-bash-3.2$ ./cachemaster -s -f data  
+>Stat:data size:488M cached:488M  
+>-bash-3.2$ ./cachemaster -c -f data    
+>Release:data  
+>-bash-3.2$ ./cachemaster -s -f data   
+>Stat:data size:488M cached:0Bytes  
 
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
