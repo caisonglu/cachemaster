@@ -64,6 +64,25 @@ henshao@taobao.com,tiechou@taobao.com
 >-bash-3.2$ ps xf | grep cachemaster | grep -v grep  
 >28694 ?        SLs    0:00 ./cachemaster -l -d mydir/ -m  
 
+###Real time stat of file(-i is interval, default 1s)
+>-bash-3.2$ ./cachemaster -r -f data   
+>file:data  
+>time    pageCount       inCache change  
+>[2103-8-5 16:03:14] 125000      125000  125000  
+>[2103-8-5 16:03:15] 125000      125000  0  
+>[2103-8-5 16:03:16] 125000      125000  0  
+>[2103-8-5 16:03:17] 125000      125000  0  
+
+###Real time stat of directory(-i is interval, default 1s)
+>-bash-3.2$ ./cachemaster -r -d mydir/ -i 0.5  
+>file:mydir/  
+>time    pageCount       inCache change  
+>[2103-8-5 16:05:12] 375000      375000  375000  
+>[2103-8-5 16:05:13] 375000      375000  0  
+>[2103-8-5 16:05:13] 375000      375000  0  
+>[2103-8-5 16:05:14] 375000      375000  0  
+>[2103-8-5 16:05:15] 375000      375000  0  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
