@@ -53,6 +53,17 @@ henshao@taobao.com,tiechou@taobao.com
 >-bash-3.2$ ps xf | grep cachemaster | grep -v grep  
 >28279 ?        SLs    0:00 ./cachemaster -l -f data -m  
 
+###lock in mem of directory
+>-bash-3.2$ ./cachemaster -l -d mydir/  
+>Lock mydir//file1 succeed, size:488M  
+>Lock mydir//file2 succeed, size:488M  
+>Lock mydir//child/file3 succeed, size:488M  
+
+###lock in mem of directory in daemon
+>-bash-3.2$ ./cachemaster -l -d mydir/ -m  
+>-bash-3.2$ ps xf | grep cachemaster | grep -v grep  
+>28694 ?        SLs    0:00 ./cachemaster -l -d mydir/ -m  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
