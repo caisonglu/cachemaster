@@ -28,6 +28,22 @@ henshao@taobao.com,tiechou@taobao.com
 >-bash-3.2$ ./cachemaster -s -f data   
 >Stat:data size:488M cached:0Bytes  
 
+###kick page cache of directory
+>-bash-3.2$ ./cachemaster -s -d mydir/  
+>Stat:mydir//file1 size:488M cached:0Bytes  
+>Stat:mydir//file2 size:488M cached:488M  
+>Stat:mydir//child/file3 size:488M cached:488M  
+>Total Cache of Directory:mydir/ size:1.4G cached:976M  
+>-bash-3.2$ ./cachemaster -c -d mydir/   
+>Release:mydir//file1  
+>Release:mydir//file2  
+>Release:mydir//child/file3  
+>-bash-3.2$ ./cachemaster -s -d mydir/  
+>Stat:mydir//file1 size:488M cached:0Bytes  
+>Stat:mydir//file2 size:488M cached:0Bytes  
+>Stat:mydir//child/file3 size:488M cached:0Bytes  
+>Total Cache of Directory:mydir/ size:1.4G cached:0Bytes  
+
 ##Help
 *   Usage:./cachemaster [Option] [File] ...
 *   -c Clear Page Cache.
