@@ -31,16 +31,16 @@ enum CmdType{
 typedef struct CmdParam{
     char path[256]; 
     long interval;
-    bool isDaemon;
-    bool isSuppress;
+    bool is_daemon;
+    bool is_suppress;
     enum CmdType  cmd_type;
     enum FileType file_type;    
 }CmdParam;
 
 typedef struct CacheStat{
-    size_t pageCount;
-    size_t inCache;
-    bool   isPrint;
+    size_t page_count;
+    size_t in_cache;
+    bool   is_print;
 }CacheStat;
 
 char buf1[1024] = {0};
@@ -48,8 +48,6 @@ char buf2[1024] = {0};
 char buf3[1024] = {0};
 
 int getUsedTime(struct timeval *begin, struct timeval *end){
-    assert(begin != NULL);
-    assert(end   != NULL);
     return (end->tv_sec - begin->tv_sec)*1000 + (end->tv_usec-begin->tv_usec)/1000;
 }
 
@@ -171,7 +169,7 @@ void parseArgs(int argc, char *argv[], CmdParam *pCmd){
                 check_count++;
                 break;
             case 'm':
-                pCmd->isDaemon = true;
+                pCmd->is_daemon = true;
                 break;
             case 'r':
                 pCmd->cmd_type = RSTAT;
@@ -182,7 +180,7 @@ void parseArgs(int argc, char *argv[], CmdParam *pCmd){
                 check_count++;
                 break;
             case 'S':
-                pCmd->isSuppress = true;
+                pCmd->is_suppress = true;
                 break;
             case 'w':
                 pCmd->cmd_type = WARM;
@@ -210,13 +208,24 @@ void parseArgs(int argc, char *argv[], CmdParam *pCmd){
     }
 }
 
-bool clear(const char* path, enum FileType file_type){
+bool doCmd(const char* path, enum CmdType cmd_type, enum FileType file_type, CacheStat* pStat){
     int  fd = 0;
     DIR  *dir = NULL;
-    char file_name[256];
-    void *pbase = NULL;
     struct dirent *dp = NULL;
+    char file_name[256];
+
+    void *pbase = NULL;
+    char *vec = NULL;
+    
     struct stat st;
+    int in_cache = 0;
+    
+    int page_index;
+    int page_count;
+    int pagesize = getpagesize();
+
+    int time_used = 0;
+    struct timeval begin, end;
 
     if(file_type == REGFILE){
         fd = open(path, O_RDONLY);
@@ -228,16 +237,77 @@ bool clear(const char* path, enum FileType file_type){
             goto ERROR;
         }
 
-        if(posix_fadvise(fd, 0, st.st_size, POSIX_FADV_DONTNEED) != 0){
-            goto ERROR;
+        switch(cmd_type){
+            case CLEAR:
+                if(posix_fadvise(fd, 0, st.st_size, POSIX_FADV_DONTNEED) != 0){
+                    goto ERROR;
+                }
+                fprintf(stdout, "Release:%s\n", path);
+                break;
+            case STAT:
+                pbase = mmap((void *)0, st.st_size, PROT_NONE, MAP_SHARED, fd, 0);
+                if(pbase == MAP_FAILED){
+                    goto ERROR;
+                }
+
+                page_count = (st.st_size+pagesize-1)/pagesize;
+                vec = (char*)calloc(1, page_count);
+                if(mincore(pbase, st.st_size, (unsigned char *)vec) != 0){
+                    goto ERROR; 
+                }
+
+                for(page_index=0; page_index<page_count; page_index++){
+                    if(vec[page_index]&1 != 0){
+                        ++in_cache;
+                    } 
+                }
+
+                pStat->page_count += page_count;
+                pStat->in_cache   += in_cache;
+
+                if(pStat->is_print == true){
+                    fprintf(stdout, "Stat:%s size:%s cached:%s\n", 
+                            path,
+                            sizeFit(st.st_size, buf1),
+                            sizeFit(in_cache*(pagesize), buf2));
+                }
+                break;
+            case LOCK:
+                pbase = mmap((void *)0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+                if(pbase == MAP_FAILED){
+                    goto ERROR;
+                }
+
+                if(mlock(pbase, st.st_size) == 0){
+                    fprintf(stdout, "Lock %s succeed, size:%s\n", path, sizeFit(st.st_size, buf1));
+                    return true;
+                }else{
+                    goto ERROR;
+                }
+            case WARM:
+                gettimeofday(&begin, NULL);
+                if(posix_fadvise(fd, 0, st.st_size, POSIX_FADV_WILLNEED) != 0){
+                    goto ERROR;
+                }
+                gettimeofday(&end, NULL);
+                time_used = getUsedTime(&begin, &end);
+                fprintf(stdout, "Warmup File:%s TimeUsed:%d ms\n", path, time_used);
+                break;
+            default:
+                fprintf(stderr, "do not support cmd type %d\n", cmd_type);
+                goto ERROR;
         }
 
-        fprintf(stdout, "Release:%s\n", path);
+        close(fd);
+        if(vec)     free(vec);
+        if(pbase)   munmap(pbase, st.st_size);
         return true;
     }else if(file_type == DIRECTORY){
         if((dir = opendir(path)) == NULL){
             goto ERROR;
         }
+
+        gettimeofday(&begin, NULL);
 
         while((dp = readdir(dir)) != NULL){
             if(strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0){
@@ -246,117 +316,35 @@ bool clear(const char* path, enum FileType file_type){
                 strcat(file_name, "/");
                 strcat(file_name, dp->d_name);
                 if(dp->d_type == DT_REG){
-                    clear(file_name, REGFILE);
+                    doCmd(file_name, cmd_type, REGFILE,  pStat);
                 }else if(dp->d_type == DT_DIR){
-                    clear(file_name, DIRECTORY);
+                    doCmd(file_name, cmd_type, DIRECTORY, pStat);
                 }else{
                     fprintf(stdout, "%s:%c type unsupported!\n", dp->d_name, dp->d_type);
                 }
             }
         }
+
+        gettimeofday(&end, NULL);
+        time_used = getUsedTime(&begin, &end);
+        if(cmd_type == WARM){
+            fprintf(stdout, "Warmup Dir:%s TimeUsed:%d ms\n", path, time_used);
+        }
+
         closedir(dir);
         return true;
     }
 
 ERROR:
     fprintf(stderr, "File:%s %s\n", path, strerror(errno));
-    if(pbase)   munmap(pbase, st.st_size);
     if(fd)      close(fd);
     if(dir)     closedir(dir);
-    return false;
-}
-
-bool normalStat(const char* path, enum FileType file_type, struct CacheStat* stat_cache){
-    int fd = 0;
-    int pageIndex;
-    int pageCount;
-    int inCache = 0;
-    DIR *dir = NULL;
-    void *pbase = NULL;
-    char *vec = NULL;
-    struct stat st;
-    struct dirent *dp = NULL;
-    char file_name[256];
-    int pagesize = getpagesize();
-
-    if(file_type == REGFILE){
-        fd = open(path, O_RDONLY);
-        if(fd<0){
-            goto ERROR;
-        }
-
-        if(stat(path, &st)<0){
-            goto ERROR;
-        }
-
-        pbase = mmap((void *)0, st.st_size, PROT_NONE, MAP_SHARED, fd, 0);
-        if(pbase == MAP_FAILED){
-            goto ERROR;
-        }
-
-        pageCount = (st.st_size+pagesize-1)/pagesize;
-        vec = (char*)calloc(1, pageCount);
-        if(mincore(pbase, st.st_size, (unsigned char *)vec) != 0){
-            goto ERROR; 
-        }
-
-        for(pageIndex=0; pageIndex<pageCount; pageIndex++){
-            if(vec[pageIndex]&1 != 0){
-                ++inCache;
-            } 
-        }
-
-        stat_cache->pageCount += pageCount;
-        stat_cache->inCache   += inCache;
-
-        if(stat_cache->isPrint == true){
-            fprintf(stdout, "Stat:%s size:%s cached:%s\n", 
-                    path,
-                    sizeFit(st.st_size, buf1),
-                    sizeFit(inCache*(pagesize), buf2));
-        }
-
-        free(vec);
-        munmap(pbase, st.st_size);
-        close(fd);
-        return true;
-    }else if(file_type == DIRECTORY){
-        if((dir = opendir(path)) == NULL){
-            goto ERROR;
-        }
-
-        while((dp = readdir(dir)) != NULL){
-            if(dp->d_name[0] != '.'){
-                memset(file_name, 0, sizeof(file_name));
-                strcat(file_name, path);
-                strcat(file_name, "/");
-                strcat(file_name, dp->d_name);
-                if(dp->d_type == DT_REG){
-                    normalStat(file_name, REGFILE,   stat_cache);
-                }else if(dp->d_type == DT_DIR){
-                    normalStat(file_name, DIRECTORY, stat_cache);
-                }else{
-                    fprintf(stdout, "%s:%c type unsupported!\n", dp->d_name, dp->d_type);
-                }
-            }
-        }
-
-        closedir(dir);
-        return true;
-    }
-
-ERROR:
-    if(stat_cache->isPrint == true){
-        fprintf(stderr, "File:%s %s\n", path, strerror(errno));
-    }
     if(vec)     free(vec);
     if(pbase)   munmap(pbase, st.st_size);
-    if(fd>0)    close(fd);
-    if(dir)     closedir(dir);
     return false;
 }
 
-int realStat(const char *path, long interval, enum FileType file_type, bool isSuppress){
+int realStat(const char *path, long interval, enum FileType file_type, bool is_suppress){
     CacheStat stat;
     int pre = 0;
     bool first = true;
@@ -364,149 +352,24 @@ int realStat(const char *path, long interval, enum FileType file_type, bool isSu
 
     memset(&stat, 0, sizeof(stat));
     fprintf(stdout, "file:%s\n", path);
-    fprintf(stdout, "time\tpageCount\tinCache\tchange\n");
+    fprintf(stdout, "time\tpage_count\tin_cache\tchange\n");
 
     while(1){
-        pre = stat.inCache;
+        pre = stat.in_cache;
         memset(&stat, 0, sizeof(stat));
-        ret = normalStat(path, file_type, &stat);
+        ret = doCmd(path, STAT, file_type, &stat);
 
-        if(pre==stat.inCache && isSuppress && !first) continue;
+        if(pre==stat.in_cache && is_suppress && !first) continue;
         first = false;
         if(ret == false){
             fprintf(stderr, "real stat error %s\n", path);
             exit(0);
         }else{
             fprintf(stdout, "%s %d\t%d\t%d\n", 
-               getTimeStr(), stat.pageCount, stat.inCache, stat.inCache-pre);
+               getTimeStr(), stat.page_count, stat.in_cache, stat.in_cache-pre);
         } 
         usleep(interval);
     }
-}
-
-bool lock(const char* path, enum FileType file_type){
-    int fd = 0;
-    DIR *dir = NULL;
-    void *pbase = NULL;
-    struct dirent *dp = NULL;
-    struct stat st;
-    char file_name[256];
-
-    if(file_type == REGFILE){
-        fd = open(path, O_RDONLY);
-        if(fd<0){
-            goto ERROR;
-        }
-
-        if(stat(path, &st)<0){
-            goto ERROR;
-        }
-
-        pbase = mmap((void *)0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-        if(pbase == MAP_FAILED){
-            goto ERROR;
-        }
-
-        if(mlock(pbase, st.st_size) == 0){
-            fprintf(stdout, "Lock %s succeed, size:%s\n", path, sizeFit(st.st_size, buf1));
-            return true;
-        }else{
-            goto ERROR;
-        }
-    }else if(file_type == DIRECTORY){
-        if((dir = opendir(path)) == NULL){
-            goto ERROR;
-        }
-
-        while((dp = readdir(dir)) != NULL){
-            if(strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0){
-                memset(file_name, 0, sizeof(file_name));
-                strcat(file_name, path);
-                strcat(file_name, "/");
-                strcat(file_name, dp->d_name);
-                if(dp->d_type == DT_REG){
-                    lock(file_name, REGFILE);
-                }else if(dp->d_type == DT_DIR){
-                    lock(file_name, DIRECTORY);
-                }else{
-                    fprintf(stdout, "%s:%c type unsupported!\n", dp->d_name, dp->d_type);
-                }
-            }
-        }
-        closedir(dir);
-        return true;
-    }
-
-ERROR:
-    fprintf(stderr, "File:%s %s\n", path, strerror(errno));
-    if(pbase)   munmap(pbase, st.st_size);
-    if(fd)      close(fd);
-    if(dir)     closedir(dir);
-    return false;
-}
-
-bool warmup(const char *path, enum FileType file_type){
-    int fd = 0;
-    DIR *dir = NULL;
-    int time_used = 0;
-    char file_name[256];
-    struct stat st;
-    struct timeval begin, end;
-    struct dirent *dp = NULL;
-
-    if(stat(path, &st)<0){
-        goto ERROR;
-    }
-
-    gettimeofday(&begin, NULL);
-    if(file_type == REGFILE){
-        fd = open(path, O_RDONLY);
-        if(fd<0){
-            goto ERROR;
-        }
-
-        if(posix_fadvise(fd, 0, st.st_size, POSIX_FADV_WILLNEED) != 0){
-            goto ERROR;
-        }
-    }else if(file_type == DIRECTORY){
-        if((dir = opendir(path)) == NULL){
-            goto ERROR;
-        }
-
-        while((dp = readdir(dir)) != NULL){
-            if(dp->d_name[0] != '.'){
-                memset(file_name, 0, sizeof(path));
-                strcat(file_name, path);
-                strcat(file_name, "/");
-                strcat(file_name, dp->d_name);
-                if(dp->d_type == DT_REG){
-                    warmup(file_name, REGFILE);
-                }else if(dp->d_type == DT_DIR){
-                    warmup(file_name, DIRECTORY);
-                }else{
-                    fprintf(stdout, "%s:%c type unsupported!\n", dp->d_name, dp->d_type);
-                }
-            }
-        }
-    }
-
-    gettimeofday(&end, NULL);
-    time_used = getUsedTime(&begin, &end);
-
-    if(file_type == REGFILE){
-        fprintf(stdout, "Warmup File:%s TimeUsed:%d ms\n", path, time_used);
-        close(fd);
-    }else if(file_type == DIRECTORY){
-        fprintf(stdout, "Warmup Dir:%s TimeUsed:%d ms\n", path, time_used);
-        closedir(dir);
-    }
-    return true;
-
-ERROR:
-    fprintf(stderr, "File:%s %s\n", path, strerror(errno));
-    if(fd)  close(fd);
-    if(dir) closedir(dir);
-    return false;
 }
 
 int main(int argc, char *argv[]){
@@ -520,29 +383,29 @@ int main(int argc, char *argv[]){
     CacheStat stat;
     memset(&stat, 0, sizeof(stat));
     memset(&cmd, 0, sizeof(cmd));
-    stat.isPrint = true; //default true
+    stat.is_print = true; //default true
     parseArgs(argc, argv, &cmd);
 
-    if(cmd.isDaemon)
+    if(cmd.is_daemon)
         daemonMe();
 
     if(cmd.cmd_type == CLEAR){
-        clear(cmd.path, cmd.file_type);
+        doCmd(cmd.path, cmd.cmd_type, cmd.file_type, NULL);
     }else if(cmd.cmd_type == STAT){
-        normalStat(cmd.path, cmd.file_type, &stat);
+        doCmd(cmd.path, cmd.cmd_type, cmd.file_type, &stat);
         if(cmd.file_type == DIRECTORY){
             fprintf(stdout, "\nTotal Cache of Directory:%s size:%s cached:%s\n", 
                     cmd.path,
-                    sizeFit(stat.pageCount*pagesize, buf1), 
-                    sizeFit(stat.inCache*pagesize, buf2));
+                    sizeFit(stat.page_count*pagesize, buf1), 
+                    sizeFit(stat.in_cache*pagesize, buf2));
         }
     }else if(cmd.cmd_type == RSTAT){
-        realStat(cmd.path, cmd.interval, cmd.file_type, cmd.isSuppress);
+        realStat(cmd.path, cmd.interval, cmd.file_type, cmd.is_suppress);
     }else if(cmd.cmd_type == LOCK){
-        lock(cmd.path, cmd.file_type);
+        doCmd(cmd.path, cmd.cmd_type, cmd.file_type, NULL);
         select(0, NULL, NULL, NULL, NULL);
     }else if(cmd.cmd_type == WARM){
-        warmup(cmd.path, cmd.file_type);
+        doCmd(cmd.path, cmd.cmd_type, cmd.file_type, NULL);
     }
 
     return 0;
