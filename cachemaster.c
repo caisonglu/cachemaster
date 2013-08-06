@@ -13,7 +13,7 @@
 #include <time.h>
 #include <stdbool.h>
 
-#define SEC_PER_US (1000*1000)
+#define US_PER_SEC (1000*1000)
 
 enum FileType{
     REGFILE,
@@ -142,7 +142,7 @@ void parseArgs(int argc, char *argv[], CmdParam *pCmd){
     int check_count = 0;
     long l = 0;
     memset(pCmd, 0, sizeof(CmdParam));
-    pCmd->interval = SEC_PER_US;
+    pCmd->interval = US_PER_SEC;
 
     while ((i = getopt(argc, argv, "d:f:i:clmrsSwh")) != EOF){
         switch(i){
@@ -159,10 +159,10 @@ void parseArgs(int argc, char *argv[], CmdParam *pCmd){
                 pCmd->file_type = REGFILE;
                 break;
             case 'i':
-                l = atof(optarg)*SEC_PER_US;
+                l = atof(optarg)*US_PER_SEC;
                 pCmd->interval = l;
                 if(pCmd->interval<=0)
-                    pCmd->interval = SEC_PER_US;
+                    pCmd->interval = US_PER_SEC;
                 break;
             case 'l':
                 pCmd->cmd_type = LOCK;
