@@ -227,7 +227,7 @@ bool doCmd(const char* path, enum CmdType cmd_type, enum FileType file_type, Cac
     
     int page_index;
     int page_count;
-    int pagesize = getpagesize();
+    size_t pagesize = getpagesize();
 
     int time_used = 0;
     struct timeval begin, end;
