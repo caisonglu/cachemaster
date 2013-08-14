@@ -413,8 +413,8 @@ int main(int argc, char *argv[]){
     CacheStat stat;
     memset(&stat, 0, sizeof(stat));
     memset(&cmd, 0, sizeof(cmd));
-    stat.is_print = true; //default true
     parseArgs(argc, argv, &cmd);
+    stat.is_print = !cmd.is_suppress; 
 
     if(cmd.is_daemon)
         daemonMe();
